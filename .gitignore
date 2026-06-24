@@ -3,7 +3,6 @@
 logs/
 results*.jsonl
 leaderboard.csv
-belebele_ben_100.jsonl
 
 # Python
 __pycache__/
