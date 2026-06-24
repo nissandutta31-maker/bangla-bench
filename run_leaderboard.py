@@ -52,40 +52,38 @@ def _litellm_version() -> str:
 LITELLM_VERSION = _litellm_version()
 
 # --------------------------------------------------------------------------- #
-# The model lineup. THIS is the strategic surface: frontier proprietary models
-# reached through their *native* API keys, plus Bangla-native models as
-# (currently commented) placeholders.
+# The model lineup. THIS is the strategic surface for BanglaBench v1.
 #
-# Every entry uses the SAME generous max_tokens (UNIFORM_MAX_TOKENS). Reasoning
-# / "thinking" models (GPT-5.5, Claude Opus 4.5, Gemini 3.1 Pro) spend hidden
-# tokens before the visible answer, so a small budget truncates them before they
-# emit the final A/B/C/D letter. A uniform budget is also required for a *fair*
-# comparison: every model gets the same room to answer.
+# Reasoning / thinking models use UNIFORM_MAX_TOKENS (2048). Non-reasoning
+# models that reliably emit a single letter can use SIMPLE_MAX_TOKENS (32).
 #
-# Bangla-native models (TigerLLM, TituLLM) are left commented out — they need an
-# HF (or other) API key plus a serving endpoint that isn't wired up yet.
+# For Bangla-native HF models, set HF_TITULLM_API_BASE and HF_TIGERLLM_API_BASE
+# to your Inference Endpoint URLs (env: prefix resolves at run time).
 # --------------------------------------------------------------------------- #
 UNIFORM_MAX_TOKENS = 2048
-# Non-reasoning models only need ~32 tokens for a single A-D letter.
 SIMPLE_MAX_TOKENS = 32
 
 # Frontier proprietary models (GPT / Claude / Gemini via native API keys).
 FRONTIER_KEY_ENVS = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"})
 
 MODELS = [
-    # label                  litellm model string                     key env var          api_base (None = provider default)         max_tokens
-    ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",               "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
-    ("DeepSeek V3",          "deepseek/deepseek-chat",                 "DEEPSEEK_API_KEY",  None,                                       SIMPLE_MAX_TOKENS),
-    ("DeepSeek R1",          "deepseek/deepseek-reasoner",             "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
-    # --- Frontier proprietary (native API keys) --- #
-    ("GPT-5.5",              "openai/gpt-5.5",                         "OPENAI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    ("Claude Opus 4.5",      "anthropic/claude-opus-4-5-20251101",     "ANTHROPIC_API_KEY", None,                                       UNIFORM_MAX_TOKENS),
-    ("Gemini 3.1 Pro",       "gemini/gemini-3.1-pro-preview",          "GEMINI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",     "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",      SIMPLE_MAX_TOKENS),
-    # --- Bangla-native: requires HF Inference Endpoint (replace <endpoint> URL) --- #
-    # ("TituLLM 3B",         "huggingface/hishab/titulm-llama-3.2-3b-v1.1",       "HF_TOKEN", "https://<endpoint>.endpoints.huggingface.cloud", UNIFORM_MAX_TOKENS),
-    # ("TigerLLM 9B",        "huggingface/md-nishat-008/TigerLLM-9B-it",        "HF_TOKEN", "https://<endpoint>.endpoints.huggingface.cloud", UNIFORM_MAX_TOKENS),
+    # label                  litellm model string                              key env var          api_base (None, URL, or env:VAR_NAME)              max_tokens
+    ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",                        "DEEPSEEK_API_KEY",  None,                                                UNIFORM_MAX_TOKENS),
+    ("GPT-5.5",              "openai/gpt-5.5",                                  "OPENAI_API_KEY",    None,                                                UNIFORM_MAX_TOKENS),
+    ("Claude Opus 4.8",      "anthropic/claude-opus-4-8",                       "ANTHROPIC_API_KEY", None,                                                UNIFORM_MAX_TOKENS),
+    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",              "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",               SIMPLE_MAX_TOKENS),
+    ("TituLLM 3B",           "huggingface/hishab/titulm-llama-3.2-3b-v1.1",     "HF_TOKEN",          "env:HF_TITULLM_API_BASE",                           UNIFORM_MAX_TOKENS),
+    ("TigerLLM 9B",          "huggingface/md-nishat-008/TigerLLM-9B-it",        "HF_TOKEN",          "env:HF_TIGERLLM_API_BASE",                          UNIFORM_MAX_TOKENS),
 ]
+
+
+def resolve_api_base(spec: str | None) -> str | None:
+    """Resolve api_base: None, a literal URL, or env:VAR_NAME from the environment."""
+    if spec is None:
+        return None
+    if spec.startswith("env:"):
+        return os.environ.get(spec[4:]) or None
+    return spec
 
 
 def run_one(base, dataset, label, model, key_env, api_base, max_tokens):
@@ -122,19 +120,24 @@ def main(argv):
     if "-h" in args or "--help" in args:
         print(__doc__)
         print("Options:")
-        print("  --frontier-only   Run only GPT / Claude / Gemini (skip DeepSeek, NIM, etc.)")
+        print("  --frontier-only   Run only GPT-5.5 + Claude Opus 4.8 (skip DeepSeek, Llama, Bangla-native)")
         return 0
 
     dataset = args[0] if args else "belebele_ben_sample.jsonl"
     base = r.RunnerConfig.load("config.yaml")  # reuse the Bangla system prompt + retry (loaded ONCE)
 
     rows = []
-    for label, model, key_env, api_base, max_tokens in MODELS:
+    for label, model, key_env, api_base_spec, max_tokens in MODELS:
         if frontier_only and key_env not in FRONTIER_KEY_ENVS:
             print(f"[skip] {label}: --frontier-only (not a frontier proprietary model)")
             continue
         if not os.environ.get(key_env):
             print(f"[skip] {label}: {key_env} not set")
+            continue
+        api_base = resolve_api_base(api_base_spec)
+        if api_base_spec and api_base_spec.startswith("env:") and not api_base:
+            env_name = api_base_spec[4:]
+            print(f"[skip] {label}: {env_name} not set (HF Inference Endpoint URL)")
             continue
         print(f"[run ] {label} ({model}) ...")
         s = run_one(base, dataset, label, model, key_env, api_base, max_tokens)
@@ -176,7 +179,7 @@ def main(argv):
         fh.write(f"- Run date (UTC): {run_date}\n")
         fh.write(f"- Dataset: `{dataset}` · {item_count_str} items\n")
         fh.write("- Scoring: 4-way MCQ · temperature 0 · closed-book\n")
-        fh.write("- max_tokens: 2048 for reasoning models (R1, V4 Pro), 32 for non-reasoning (V3)\n")
+        fh.write("- max_tokens: 2048 for reasoning models; 32 for Llama 3.3 (NIM)\n")
         fh.write(f"- litellm version: {LITELLM_VERSION}\n\n")
         fh.write("| Rank | Model | Model ID | max_tokens | Accuracy | Correct/Total | Parsed |\n")
         fh.write("|---|---|---|---|---|---|---|\n")

@@ -18,7 +18,7 @@ The live leaderboard is auto-generated in [`leaderboard.md`](./leaderboard.md) (
 | 2 | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` | 2048 | 84.0% | 84/100 | 93/100 |
 | 3 | DeepSeek V3 | `deepseek/deepseek-chat` | 32 | 77.0% | 77/100 | 100/100 |
 
-*100-item subset of Belebele Bengali. GPT, Claude, Gemini, and Bangla-native models pending API key access.*
+*100-item subset of Belebele Bengali. v1 lineup: DeepSeek V4 Pro, GPT-5.5, Claude Opus 4.8, Llama 3.3, TituLLM, TigerLLM — run `run_leaderboard.py` with your keys to refresh.*
 
 For context: the random floor on a 4-way MCQ is 25%, and frontier models score well above it on Belebele reading comprehension. A healthy v0 baseline should look nothing like chance.
 
@@ -36,13 +36,18 @@ For context: the random floor on a 4-way MCQ is 25%, and frontier models score w
 
 ---
 
-## Model coverage (v0 target)
+## Model coverage (v1 lineup)
 
-A meaningful Bengali leaderboard has to span both worlds:
+The active `MODELS` list in [`run_leaderboard.py`](run_leaderboard.py):
 
-- **Frontier proprietary** — GPT-5.5, Claude Opus 4.5, Gemini 3.1 Pro (wired in `run_leaderboard.py`; requires native API keys)
-- **Strong open-weight** — DeepSeek, Llama 3.3 70B via NVIDIA NIM
-- **Bangla-native / Indic-tuned** — TituLLM 3B, TigerLLM 9B (paste-ready entries; require HF Inference Endpoints)
+| Pole | Model | Key env var |
+|------|-------|-------------|
+| Open-weight | DeepSeek V4 Pro | `DEEPSEEK_API_KEY` |
+| Frontier proprietary | GPT-5.5 | `OPENAI_API_KEY` |
+| Frontier proprietary | Claude Opus 4.8 | `ANTHROPIC_API_KEY` |
+| Open-weight baseline | Llama 3.3 70B (NVIDIA NIM) | `NVIDIA_API_KEY` |
+| Bangla-native | TituLLM 3B | `HF_TOKEN` + `HF_TITULLM_API_BASE` |
+| Bangla-native | TigerLLM 9B | `HF_TOKEN` + `HF_TIGERLLM_API_BASE` |
 
 ---
 
@@ -51,46 +56,57 @@ A meaningful Bengali leaderboard has to span both worlds:
 ```bash
 pip install -r requirements.txt
 
-# Export only the keys for models you want ranked (others are skipped).
-export DEEPSEEK_API_KEY=...
-export OPENAI_API_KEY=...      # GPT-5.5
-export ANTHROPIC_API_KEY=...   # Claude Opus 4.5
-export GEMINI_API_KEY=...      # Gemini 3.1 Pro
-export NVIDIA_API_KEY=...      # Llama 3.3 70B (NIM)
-export HF_TOKEN=...            # TituLLM / TigerLLM (HF Inference Endpoints)
+# Export keys for whichever models you want ranked (others are skipped).
+export DEEPSEEK_API_KEY=...   # DeepSeek V4 Pro
+export OPENAI_API_KEY=...     # GPT-5.5
+export ANTHROPIC_API_KEY=...  # Claude Opus 4.8
+export NVIDIA_API_KEY=...     # Llama 3.3 70B (NIM)
+export HF_TOKEN=...           # TituLLM + TigerLLM
+export HF_TITULLM_API_BASE=https://xxxxx.endpoints.huggingface.cloud
+export HF_TIGERLLM_API_BASE=https://yyyyy.endpoints.huggingface.cloud
 
-# Cheap smoke run (30 items):
+# Full v1 lineup (all keys above):
+python3 run_leaderboard.py belebele_ben_sample.jsonl
+
+# Frontier + DeepSeek only (skip Llama / Bangla-native):
 python3 run_leaderboard.py --frontier-only belebele_ben_sample.jsonl
-
-# Dev subset matching published standings (100 items):
-python3 run_leaderboard.py --frontier-only belebele_ben_100.jsonl
-
-# Full benchmark (900 items, resumable):
-python3 run_leaderboard.py belebele_ben_full.jsonl
 ```
 
 This evaluates each model listed in **`run_leaderboard.py` → `MODELS`** independently on the dataset and writes ranked `leaderboard.md` and `leaderboard.csv`. Only models whose API key env var is set are run.
 
 ### API key reference
 
-| Model | Env var | Notes |
-|-------|---------|-------|
-| DeepSeek V4 Pro / V3 / R1 | `DEEPSEEK_API_KEY` | Active on current board |
+| Model | Env var(s) | Notes |
+|-------|------------|-------|
+| DeepSeek V4 Pro | `DEEPSEEK_API_KEY` | Reasoning model; 2048 max_tokens |
 | GPT-5.5 | `OPENAI_API_KEY` | Frontier proprietary |
-| Claude Opus 4.5 | `ANTHROPIC_API_KEY` | Frontier proprietary |
-| Gemini 3.1 Pro | `GEMINI_API_KEY` | Frontier proprietary |
-| Llama 3.3 70B (NIM) | `NVIDIA_API_KEY` | Open-weight baseline |
-| TituLLM 3B | `HF_TOKEN` | Requires dedicated HF Inference Endpoint |
-| TigerLLM 9B | `HF_TOKEN` | Requires dedicated HF Inference Endpoint |
+| Claude Opus 4.8 | `ANTHROPIC_API_KEY` | `anthropic/claude-opus-4-8` |
+| Llama 3.3 70B (NIM) | `NVIDIA_API_KEY` | Open-weight baseline via NVIDIA NIM |
+| TituLLM 3B | `HF_TOKEN`, `HF_TITULLM_API_BASE` | HF Inference Endpoint URL |
+| TigerLLM 9B | `HF_TOKEN`, `HF_TIGERLLM_API_BASE` | HF Inference Endpoint URL |
 
 ### Bangla-native models (HF Inference Endpoints)
 
-TituLLM and TigerLLM are not on HF's shared Inference API. Deploy each on [Hugging Face Inference Endpoints](https://huggingface.co/inference-endpoints), then uncomment the entry in `run_leaderboard.py` and replace `<endpoint>` with your URL:
+TituLLM and TigerLLM are wired in `MODELS` but skipped until you set endpoint URLs:
 
-1. Deploy `hishab/titulm-llama-3.2-3b-v1.1` (T4 or A10G) and/or `md-nishat-008/TigerLLM-9B-it` (A10G or L4)
-2. `export HF_TOKEN=hf_...`
-3. Uncomment the TituLLM / TigerLLM tuple and set the `api_base` URL
-4. Smoke: `python3 run_leaderboard.py belebele_ben_sample.jsonl`
+1. Deploy on [Hugging Face Inference Endpoints](https://huggingface.co/inference-endpoints):
+   - `hishab/titulm-llama-3.2-3b-v1.1` (T4 or A10G)
+   - `md-nishat-008/TigerLLM-9B-it` (A10G or L4)
+2. Export:
+   ```bash
+   export HF_TOKEN=hf_...
+   export HF_TITULLM_API_BASE=https://<your-titullm-id>.endpoints.huggingface.cloud
+   export HF_TIGERLLM_API_BASE=https://<your-tigerllm-id>.endpoints.huggingface.cloud
+   ```
+3. Smoke: `python3 run_leaderboard.py belebele_ben_sample.jsonl`
+
+### Dataset sizes
+
+```bash
+python3 run_leaderboard.py belebele_ben_sample.jsonl   # 30 items — cheap smoke
+python3 run_leaderboard.py belebele_ben_100.jsonl      # 100 items — dev subset
+python3 run_leaderboard.py belebele_ben_full.jsonl     # 900 items — full benchmark
+```
 
 ---
 
