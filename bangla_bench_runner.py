@@ -615,6 +615,7 @@ def evaluate_file(
     config: RunnerConfig,
     input_path: str,
     output_path: str,
+    max_workers: int = 1,
 ) -> dict[str, Any]:
     """Evaluate every MCQ item in a JSONL file; write JSONL raw results.
 
@@ -622,6 +623,9 @@ def evaluate_file(
     loaded and skipped, and new results are APPENDED. This lets an interrupted
     900-item paid run be restarted without re-spending on completed items. The
     returned summary reflects the FULL set scored so far (prior + new).
+
+    When max_workers is 1, items are scored sequentially. When max_workers is
+    greater than 1, items are scored in parallel using a thread pool.
     """
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -648,46 +652,80 @@ def evaluate_file(
             if prior.get("status") != "success":
                 errors += 1
 
-    with open(out, "a", encoding="utf-8") as out_fh:
-        for idx, raw in enumerate(iter_jsonl(input_path)):
-            item = normalize_item(raw, fallback_id=f"item_{idx}")
-            if item.item_id in scored_ids:
-                skipped += 1
-                continue
-            prompt = render_prompt(item)
-            result = call_with_failover(config, prompt, task_id=item.item_id)
-            total += 1
-            is_correct = (
-                result.parsed_answer is not None
-                and item.correct_answer is not None
-                and result.parsed_answer == item.correct_answer
-            )
-            if result.parsed_answer is not None:
-                parsed += 1
-            if is_correct:
-                correct += 1
-            if result.status != "success":
-                errors += 1
+    def process_item(idx: int, item: MCQItem):
+        prompt = render_prompt(item)
+        result = call_with_failover(config, prompt, task_id=item.item_id)
+        is_correct = (
+            result.parsed_answer is not None
+            and item.correct_answer is not None
+            and result.parsed_answer == item.correct_answer
+        )
+        record = {
+            "item_id": item.item_id,
+            "provider": result.provider,
+            "model": result.model,
+            "predicted": result.parsed_answer,
+            "gold": item.correct_answer,
+            "is_correct": is_correct,
+            "status": result.status,
+            "response_text": result.response_text,
+            "tokens_used": result.tokens_used,
+            "latency_seconds": result.latency_seconds,
+            "retry_count": result.retry_count,
+            "failover_used": result.failover_used,
+            "error_type": result.error_type,
+        }
+        return (idx, item.item_id, result, is_correct, record)
 
-            record = {
-                "item_id": item.item_id,
-                "provider": result.provider,
-                "model": result.model,
-                "predicted": result.parsed_answer,
-                "gold": item.correct_answer,
-                "is_correct": is_correct,
-                "status": result.status,
-                "response_text": result.response_text,
-                "tokens_used": result.tokens_used,
-                "latency_seconds": result.latency_seconds,
-                "retry_count": result.retry_count,
-                "failover_used": result.failover_used,
-                "error_type": result.error_type,
-            }
-            out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-            # Flush per item so a crash mid-run leaves a resumable file.
-            out_fh.flush()
-            scored_ids.add(item.item_id)
+    with open(out, "a", encoding="utf-8") as out_fh:
+        if max_workers > 1:
+            items_to_process = []
+            for idx, raw in enumerate(iter_jsonl(input_path)):
+                item = normalize_item(raw, fallback_id=f"item_{idx}")
+                if item.item_id in scored_ids:
+                    skipped += 1
+                    continue
+                items_to_process.append((idx, item))
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_item = {
+                    executor.submit(process_item, idx, item): (idx, item)
+                    for idx, item in items_to_process
+                }
+                for future in as_completed(future_to_item):
+                    idx, item_id, result, is_correct, record = future.result()
+                    total += 1
+                    if result.parsed_answer is not None:
+                        parsed += 1
+                    if is_correct:
+                        correct += 1
+                    if result.status != "success":
+                        errors += 1
+                    # Durable write as each item completes. The as_completed loop
+                    # runs in this single (consumer) thread, so writes are already
+                    # serialized -> an interrupted run stays resumable instead of
+                    # losing every buffered-in-memory result.
+                    out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    out_fh.flush()
+                    scored_ids.add(item_id)
+        else:
+            for idx, raw in enumerate(iter_jsonl(input_path)):
+                item = normalize_item(raw, fallback_id=f"item_{idx}")
+                if item.item_id in scored_ids:
+                    skipped += 1
+                    continue
+                _, item_id, result, is_correct, record = process_item(idx, item)
+                total += 1
+                if result.parsed_answer is not None:
+                    parsed += 1
+                if is_correct:
+                    correct += 1
+                if result.status != "success":
+                    errors += 1
+                out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                # Flush per item so a crash mid-run leaves a resumable file.
+                out_fh.flush()
+                scored_ids.add(item_id)
 
     # Flush the buffered CSV audit log (the last <batch_size rows would
     # otherwise stay stuck in memory and never reach disk).
@@ -717,102 +755,7 @@ def evaluate_file_concurrent(
     Resumable: if output_path already exists, previously scored item_ids are
     loaded and skipped, and new results are APPENDED.
     """
-    out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    total = 0
-    correct = 0
-    parsed = 0
-    skipped = 0
-    errors = 0
-    scored_ids: set[str] = set()
-
-    # Seed counters/ids from any prior progress.
-    if out.exists():
-        for prior in iter_jsonl(str(out)):
-            item_id = str(prior.get("item_id", ""))
-            if item_id:
-                scored_ids.add(item_id)
-            total += 1
-            if prior.get("predicted") is not None:
-                parsed += 1
-            if prior.get("is_correct"):
-                correct += 1
-            if prior.get("status") != "success":
-                errors += 1
-
-    # Collect all items to process
-    items_to_process = []
-    for idx, raw in enumerate(iter_jsonl(input_path)):
-        item = normalize_item(raw, fallback_id=f"item_{idx}")
-        if item.item_id in scored_ids:
-            skipped += 1
-            continue
-        items_to_process.append((idx, item))
-
-    # Process items in parallel; write each result as it completes.
-    def process_item(idx: int, item: MCQItem):
-        prompt = render_prompt(item)
-        result = call_with_failover(config, prompt, task_id=item.item_id)
-        is_correct = (
-            result.parsed_answer is not None
-            and item.correct_answer is not None
-            and result.parsed_answer == item.correct_answer
-        )
-        record = {
-            "item_id": item.item_id,
-            "provider": result.provider,
-            "model": result.model,
-            "predicted": result.parsed_answer,
-            "gold": item.correct_answer,
-            "is_correct": is_correct,
-            "status": result.status,
-            "response_text": result.response_text,
-            "tokens_used": result.tokens_used,
-            "latency_seconds": result.latency_seconds,
-            "retry_count": result.retry_count,
-            "failover_used": result.failover_used,
-            "error_type": result.error_type,
-        }
-        return (idx, item.item_id, result, is_correct, record)
-
-    with open(out, "a", encoding="utf-8") as out_fh:
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_item = {
-                executor.submit(process_item, idx, item): (idx, item)
-                for idx, item in items_to_process
-            }
-            for future in as_completed(future_to_item):
-                idx, item_id, result, is_correct, record = future.result()
-                total += 1
-                if result.parsed_answer is not None:
-                    parsed += 1
-                if is_correct:
-                    correct += 1
-                if result.status != "success":
-                    errors += 1
-                # Durable write as each item completes. The as_completed loop
-                # runs in this single (consumer) thread, so writes are already
-                # serialized -> an interrupted run stays resumable instead of
-                # losing every buffered-in-memory result.
-                out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-                out_fh.flush()
-                scored_ids.add(item_id)
-
-    # Flush the buffered CSV audit log so the last <batch_size rows aren't lost.
-    log_attempt_csv_flush_all()
-
-    accuracy = (correct / total) if total else 0.0
-    return {
-        "total": total,
-        "parsed": parsed,
-        "correct": correct,
-        "accuracy": accuracy,
-        "output_path": str(out),
-        "csv_log": config.csv_path,
-        "skipped": skipped,
-        "errors": errors,
-    }
+    return evaluate_file(config, input_path, output_path, max_workers=max_workers)
 
 
 # --------------------------------------------------------------------------- #
@@ -835,6 +778,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_eval.add_argument(
         "-o", "--output", default="results.jsonl", help="Output JSONL path (default: results.jsonl)."
     )
+    p_eval.add_argument(
+        "-w", "--workers", type=int, default=1, help="Parallel workers (default: 1, sequential)."
+    )
 
     return parser
 
@@ -849,7 +795,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0 if result.status == "success" else 1
 
     if args.command == "eval":
-        summary = evaluate_file(config, args.input, args.output)
+        summary = evaluate_file(config, args.input, args.output, max_workers=args.workers)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
 
