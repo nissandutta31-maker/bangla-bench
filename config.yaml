@@ -23,10 +23,9 @@ providers:
     temperature: 0.0
     max_tokens: 2048
 
-  # NVIDIA NIM (OpenAI-compatible). Llama-3.1-70B still hosted, but it's a 2024
-  # open model -> keep only as a baseline, not as "the frontier story".
+  # NVIDIA NIM (OpenAI-compatible). Llama 3.3 70B open-weight baseline via NIM.
   - name: nvidia
-    model: "openai/meta/llama-3.1-70b-instruct"
+    model: "openai/meta/llama-3.3-70b-instruct"
     api_key_env: NVIDIA_API_KEY
     api_base: "https://integrate.api.nvidia.com/v1"
     temperature: 0.0

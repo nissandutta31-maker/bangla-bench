@@ -3,6 +3,9 @@
 logs/
 results*.jsonl
 leaderboard.csv
+leaderboard_*.csv
+leaderboard_summary.*
+review_*.csv
 belebele_ben_100.jsonl
 
 # Python

@@ -81,6 +81,18 @@ def main() -> int:
     ok &= check(item2.choices == ["w", "x", "y", "z"], "normalize choices list")
     ok &= check(item2.correct_answer == "A", "normalize answer 1 -> A")
 
+    # --- native MCQ benchmark (choices list + short passage) ---------------- #
+    raw3 = {
+        "item_id": "native_mcq_001",
+        "passage": "",
+        "question": "বাংলাদেশের রাজধানীর নাম কী?",
+        "choices": ["ঢাকা", "খুলনা", "চট্টগ্রাম", "রাজশাহী"],
+        "answer": 1,
+    }
+    item3 = r.normalize_item(raw3, "fallback")
+    ok &= check(item3.correct_answer == "A", "native MCQ answer 1 -> A")
+    ok &= check(item3.choices[0] == "ঢাকা", "native MCQ choices list")
+
     # --- prompt rendering -------------------------------------------------- #
     prompt = r.render_prompt(item1)
     ok &= check("A. a" in prompt and "D. d" in prompt, "render includes lettered choices")

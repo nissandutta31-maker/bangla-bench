@@ -1,0 +1,24 @@
+{
+  "belebele_ben_full.jsonl": {
+    "total": 900,
+    "verified": 0,
+    "ambiguous": 0,
+    "wrong_key": 0,
+    "bad_translation": 0,
+    "status": "pending_review",
+    "reviewer": null,
+    "review_date": null,
+    "notes": "Run: python3 export_review.py belebele_ben_full.jsonl review_belebele.csv"
+  },
+  "bangla_mcq_native.jsonl": {
+    "total": 20,
+    "verified": 20,
+    "ambiguous": 0,
+    "wrong_key": 0,
+    "bad_translation": 0,
+    "status": "seed_verified",
+    "reviewer": "project_author",
+    "review_date": "2026-06-24",
+    "notes": "v0 seed set; expand to 100+ items before publishing standalone scores"
+  }
+}
