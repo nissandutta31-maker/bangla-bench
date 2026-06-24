@@ -8,7 +8,7 @@
     "status": "pending_review",
     "reviewer": null,
     "review_date": null,
-    "notes": "Run: python3 export_review.py belebele_ben_full.jsonl review_belebele.csv"
+    "notes": "Run: python3 export_review.py belebele_ben_full.jsonl review_belebele.csv. Full leaderboard: export API keys then python3 run_leaderboard.py"
   },
   "bangla_mcq_native.jsonl": {
     "total": 20,
