@@ -60,10 +60,10 @@ export NVIDIA_API_KEY=...      # Llama 3.3 70B (NIM)
 export HF_TOKEN=...            # TituLLM / TigerLLM (HF Inference Endpoints)
 
 # Cheap smoke run (30 items):
-python3 run_leaderboard.py belebele_ben_sample.jsonl
+python3 run_leaderboard.py --frontier-only belebele_ben_sample.jsonl
 
 # Dev subset matching published standings (100 items):
-python3 run_leaderboard.py belebele_ben_100.jsonl
+python3 run_leaderboard.py --frontier-only belebele_ben_100.jsonl
 
 # Full benchmark (900 items, resumable):
 python3 run_leaderboard.py belebele_ben_full.jsonl

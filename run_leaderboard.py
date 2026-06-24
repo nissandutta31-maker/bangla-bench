@@ -69,6 +69,9 @@ UNIFORM_MAX_TOKENS = 2048
 # Non-reasoning models only need ~32 tokens for a single A-D letter.
 SIMPLE_MAX_TOKENS = 32
 
+# Frontier proprietary models (GPT / Claude / Gemini via native API keys).
+FRONTIER_KEY_ENVS = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"})
+
 MODELS = [
     # label                  litellm model string                     key env var          api_base (None = provider default)         max_tokens
     ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",               "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
@@ -111,11 +114,25 @@ def count_dataset_items(path):
 
 
 def main(argv):
-    dataset = argv[0] if argv else "belebele_ben_sample.jsonl"
+    args = list(argv)
+    frontier_only = False
+    if "--frontier-only" in args:
+        frontier_only = True
+        args = [a for a in args if a != "--frontier-only"]
+    if "-h" in args or "--help" in args:
+        print(__doc__)
+        print("Options:")
+        print("  --frontier-only   Run only GPT / Claude / Gemini (skip DeepSeek, NIM, etc.)")
+        return 0
+
+    dataset = args[0] if args else "belebele_ben_sample.jsonl"
     base = r.RunnerConfig.load("config.yaml")  # reuse the Bangla system prompt + retry (loaded ONCE)
 
     rows = []
     for label, model, key_env, api_base, max_tokens in MODELS:
+        if frontier_only and key_env not in FRONTIER_KEY_ENVS:
+            print(f"[skip] {label}: --frontier-only (not a frontier proprietary model)")
+            continue
         if not os.environ.get(key_env):
             print(f"[skip] {label}: {key_env} not set")
             continue
