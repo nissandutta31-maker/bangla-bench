@@ -12,7 +12,7 @@ own single-provider config, then aggregates the per-model accuracies into a
 ranked table (leaderboard.md + leaderboard.csv).
 
 Usage:
-    python run_leaderboard.py belebele_ben_sample.jsonl
+    python3 run_leaderboard.py belebele_ben_sample.jsonl
 
 Only models whose API key env var is actually set are run; the rest are skipped,
 so you can benchmark a subset by exporting only the keys you have.
@@ -66,13 +66,19 @@ LITELLM_VERSION = _litellm_version()
 # HF (or other) API key plus a serving endpoint that isn't wired up yet.
 # --------------------------------------------------------------------------- #
 UNIFORM_MAX_TOKENS = 2048
+# Non-reasoning models only need ~32 tokens for a single A-D letter.
+SIMPLE_MAX_TOKENS = 32
 
 MODELS = [
     # label                  litellm model string                     key env var          api_base (None = provider default)         max_tokens
-    ("GPT-5.5",              "openai/gpt-5.5",                         "OPENAI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    ("Claude Opus 4.5",      "anthropic/claude-opus-4-5-20251101",     "ANTHROPIC_API_KEY", None,                                       UNIFORM_MAX_TOKENS),
-    ("Gemini 3.1 Pro",       "gemini/gemini-3.1-pro-preview",          "GEMINI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",     "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",      UNIFORM_MAX_TOKENS),
+    ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",               "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
+    ("DeepSeek V3",          "deepseek/deepseek-chat",                 "DEEPSEEK_API_KEY",  None,                                       SIMPLE_MAX_TOKENS),
+    ("DeepSeek R1",          "deepseek/deepseek-reasoner",             "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
+    # --- Models below require their own API keys --- #
+    # ("GPT-5.5",            "openai/gpt-5.5",                        "OPENAI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
+    # ("Claude Opus 4.5",    "anthropic/claude-opus-4-5-20251101",    "ANTHROPIC_API_KEY", None,                                       UNIFORM_MAX_TOKENS),
+    # ("Gemini 3.1 Pro",     "gemini/gemini-3.1-pro-preview",         "GEMINI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
+    # ("Llama 3.3 70B (NIM)","openai/meta/llama-3.3-70b-instruct",    "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",      SIMPLE_MAX_TOKENS),
     # --- Bangla-native models: wire these once you have an HF/other key + endpoint --- #
     # ("TigerLLM",           "<hf/other route>",                       "HF_API_KEY",        "<serving endpoint>",                       UNIFORM_MAX_TOKENS),
     # ("TituLLM",            "<hf/other route>",                       "HF_API_KEY",        "<serving endpoint>",                       UNIFORM_MAX_TOKENS),
@@ -153,10 +159,7 @@ def main(argv):
         fh.write(f"- Run date (UTC): {run_date}\n")
         fh.write(f"- Dataset: `{dataset}` · {item_count_str} items\n")
         fh.write("- Scoring: 4-way MCQ · temperature 0 · closed-book\n")
-        fh.write(
-            f"- max_tokens: {UNIFORM_MAX_TOKENS} (uniform across all models — required "
-            "for a fair comparison of reasoning/thinking models)\n"
-        )
+        fh.write("- max_tokens: 2048 for reasoning models (R1, V4 Pro), 32 for non-reasoning (V3)\n")
         fh.write(f"- litellm version: {LITELLM_VERSION}\n\n")
         fh.write("| Rank | Model | Model ID | max_tokens | Accuracy | Correct/Total | Parsed |\n")
         fh.write("|---|---|---|---|---|---|---|\n")
