@@ -242,7 +242,8 @@ def log_attempt(csv_path: str, result: AttemptResult, include_response: bool = F
 # such match so a model that reasons aloud and then restates its final choice
 # is scored on the restatement, not an earlier mention.
 _ANSWER_MARKER_RE = re.compile(
-    r"(?:answer|উত্তর|ans|final)\b[\s:：\-.)=]*(?:is\s+)?\b([ABCD])\b",
+    r"(?:answer|উত্তর|ans|final|সঠিক\s*উত্তর|correct\s*answer|সঠিক\s*বিকল্প)\b"
+    r"[\s:：\-.)=*]*(?:is\s+)?(?:\(([ABCD])\)|\b([ABCD])\b)",
     re.IGNORECASE,
 )
 _STANDALONE_LETTER_RE = re.compile(r"\b([ABCD])\b", re.IGNORECASE)
@@ -259,11 +260,14 @@ def parse_answer(text: str) -> Optional[str]:
     """
     if not text:
         return None
-    cleaned = text.strip()
+    cleaned = text.strip().replace("**", "").replace("__", "")
 
     marker_matches = _ANSWER_MARKER_RE.findall(cleaned)
     if marker_matches:
-        return marker_matches[-1].upper()
+        paren, bare = marker_matches[-1]
+        letter = paren or bare
+        if letter:
+            return letter.upper()
 
     if cleaned.upper() in _LETTERS:
         return cleaned.upper()
@@ -272,7 +276,8 @@ def parse_answer(text: str) -> Optional[str]:
         (ln for ln in reversed(cleaned.splitlines()) if ln.strip()),
         "",
     )
-    line_matches = _STANDALONE_LETTER_RE.findall(last_line)
+    last_line_clean = re.sub(r"[*()\[\].,!?]", " ", last_line)
+    line_matches = _STANDALONE_LETTER_RE.findall(last_line_clean)
     if line_matches:
         return line_matches[-1].upper()
     return None
