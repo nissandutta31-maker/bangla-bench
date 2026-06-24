@@ -74,14 +74,14 @@ MODELS = [
     ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",               "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
     ("DeepSeek V3",          "deepseek/deepseek-chat",                 "DEEPSEEK_API_KEY",  None,                                       SIMPLE_MAX_TOKENS),
     ("DeepSeek R1",          "deepseek/deepseek-reasoner",             "DEEPSEEK_API_KEY",  None,                                       UNIFORM_MAX_TOKENS),
-    # --- Models below require their own API keys --- #
-    # ("GPT-5.5",            "openai/gpt-5.5",                        "OPENAI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    # ("Claude Opus 4.5",    "anthropic/claude-opus-4-5-20251101",    "ANTHROPIC_API_KEY", None,                                       UNIFORM_MAX_TOKENS),
-    # ("Gemini 3.1 Pro",     "gemini/gemini-3.1-pro-preview",         "GEMINI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
-    # ("Llama 3.3 70B (NIM)","openai/meta/llama-3.3-70b-instruct",    "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",      SIMPLE_MAX_TOKENS),
-    # --- Bangla-native models: wire these once you have an HF/other key + endpoint --- #
-    # ("TigerLLM",           "<hf/other route>",                       "HF_API_KEY",        "<serving endpoint>",                       UNIFORM_MAX_TOKENS),
-    # ("TituLLM",            "<hf/other route>",                       "HF_API_KEY",        "<serving endpoint>",                       UNIFORM_MAX_TOKENS),
+    # --- Frontier proprietary (native API keys) --- #
+    ("GPT-5.5",              "openai/gpt-5.5",                         "OPENAI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
+    ("Claude Opus 4.5",      "anthropic/claude-opus-4-5-20251101",     "ANTHROPIC_API_KEY", None,                                       UNIFORM_MAX_TOKENS),
+    ("Gemini 3.1 Pro",       "gemini/gemini-3.1-pro-preview",          "GEMINI_API_KEY",    None,                                       UNIFORM_MAX_TOKENS),
+    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",     "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",      SIMPLE_MAX_TOKENS),
+    # --- Bangla-native: requires HF Inference Endpoint (replace <endpoint> URL) --- #
+    # ("TituLLM 3B",         "huggingface/hishab/titulm-llama-3.2-3b-v1.1",       "HF_TOKEN", "https://<endpoint>.endpoints.huggingface.cloud", UNIFORM_MAX_TOKENS),
+    # ("TigerLLM 9B",        "huggingface/md-nishat-008/TigerLLM-9B-it",        "HF_TOKEN", "https://<endpoint>.endpoints.huggingface.cloud", UNIFORM_MAX_TOKENS),
 ]
 
 
