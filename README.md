@@ -57,13 +57,13 @@ Edit `config.yaml` to set:
 ### Single prompt
 
 ```bash
-python bangla_bench_runner.py prompt "প্রশ্ন: বাংলাদেশের রাজধানী কোনটি? A. ঢাকা B. খুলনা C. চট্টগ্রাম D. সিলেট"
+python3 bangla_bench_runner.py prompt "প্রশ্ন: বাংলাদেশের রাজধানী কোনটি? A. ঢাকা B. খুলনা C. চট্টগ্রাম D. সিলেট"
 ```
 
 ### Evaluate a JSONL file
 
 ```bash
-python bangla_bench_runner.py eval sample_items.jsonl -o results.jsonl
+python3 bangla_bench_runner.py eval sample_items.jsonl -o results.jsonl
 ```
 
 Outputs:
@@ -77,7 +77,7 @@ Outputs:
 ### Custom config path
 
 ```bash
-python bangla_bench_runner.py --config myconfig.yaml eval items.jsonl
+python3 bangla_bench_runner.py --config myconfig.yaml eval items.jsonl
 ```
 
 ## Input JSONL format
@@ -119,7 +119,7 @@ error_type, error_message, retry_count, failover_used`
 ## Testing
 
 ```bash
-python test_smoke.py
+python3 test_smoke.py
 ```
 
 These tests run fully offline (LiteLLM `completion` is mocked) and cover answer
