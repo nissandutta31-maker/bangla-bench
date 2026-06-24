@@ -1,0 +1,68 @@
+# Bangla Bench LiteLLM Runner - configuration (CORRECTED)
+#
+# API keys are NEVER stored here. Each provider references an environment
+# variable NAME; the runner reads the actual secret from the environment at run
+# time. Export keys before running, e.g.:
+#   export DEEPSEEK_API_KEY=...
+#   export NVIDIA_API_KEY=...
+#
+# This file is used two ways:
+#   1) bangla_bench_runner.py  -> failover SERVING (first provider that answers)
+#   2) run_leaderboard.py      -> reuses ONLY system_prompt + retry; it overrides
+#      providers to score each model INDEPENDENTLY (correct for a benchmark).
+# For a leaderboard, edit the MODELS list in run_leaderboard.py, not this list.
+
+providers:
+  # DeepSeek V4 Pro -- VALID as of Apr 2026 (the agent got this one right).
+  # It's a high-capability model; if you ever enable thinking mode, raise
+  # max_tokens well above 16 or the final answer letter gets truncated.
+  - name: deepseek
+    model: "deepseek/deepseek-v4-pro"
+    api_key_env: DEEPSEEK_API_KEY
+    api_base: "https://api.deepseek.com/v1"
+    temperature: 0.0
+    max_tokens: 2048
+
+  # NVIDIA NIM (OpenAI-compatible). Llama-3.1-70B still hosted, but it's a 2024
+  # open model -> keep only as a baseline, not as "the frontier story".
+  - name: nvidia
+    model: "openai/meta/llama-3.1-70b-instruct"
+    api_key_env: NVIDIA_API_KEY
+    api_base: "https://integrate.api.nvidia.com/v1"
+    temperature: 0.0
+    max_tokens: 2048
+
+  # REMOVED: perplexity/llama-3.1-sonar-large-128k-online
+  #   (a) Deprecated since Feb 2025 -> 400s. Replacements: sonar / sonar-pro.
+  #   (b) Sonar "online" models web-SEARCH at query time -> they can look up the
+  #       answer. That invalidates a closed-book reasoning benchmark.
+  #   (c) Perplexity's API does NOT serve GPT/Claude/Gemini -- only Sonar. To
+  #       benchmark the real frontier models, use their NATIVE keys (see
+  #       run_leaderboard.py). If you want a Perplexity-served closed-book model,
+  #       the offline one is r1-1776:
+  # - name: perplexity
+  #   model: "perplexity/r1-1776"
+  #   api_key_env: PERPLEXITY_API_KEY
+  #   api_base: "https://api.perplexity.ai"
+  #   temperature: 0.0
+  #   max_tokens: 16
+
+retry:
+  max_retries: 3
+  base_delay: 1.0
+  max_delay: 30.0
+  jitter: true
+
+system_prompt: |
+  আপনি একজন সতর্ক ও নির্ভুল বাংলা ভাষার পরীক্ষার্থী।
+  নিচে একটি অনুচ্ছেদ, একটি প্রশ্ন এবং চারটি বিকল্প (A, B, C, D) দেওয়া হবে।
+  শুধুমাত্র সঠিক বিকল্পের অক্ষরটি উত্তর হিসেবে দিন।
+  কোনো ব্যাখ্যা, বিরামচিহ্ন বা অতিরিক্ত শব্দ লিখবেন না।
+  উত্তর অবশ্যই কেবল একটি অক্ষর হবে: A, B, C অথবা D।
+
+logging:
+  csv_path: "logs/bangla_bench_log.csv"
+  prompt_preview_chars: 120
+  # Performance tuning (new in v0.2):
+  #   csv_include_response: false  # omit full response_text from CSV (saves massive I/O)
+  #   csv_batch_size: 100          # batch CSV writes (fewer disk ops)
