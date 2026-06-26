@@ -1,3 +1,6 @@
+# Secrets (never commit)
+.env
+
 # Logs and run artifacts
 *.log
 logs/

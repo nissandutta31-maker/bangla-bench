@@ -53,7 +53,7 @@ class ProviderConfig:
     model: str
     api_key_env: str
     api_base: Optional[str] = None
-    temperature: float = 0.0
+    temperature: Optional[float] = 0.0
     max_tokens: int = 16
 
     @property
@@ -423,9 +423,10 @@ def call_with_failover(
                     model=provider.model,
                     messages=messages,
                     api_key=provider.api_key,
-                    temperature=provider.temperature,
                     max_tokens=provider.max_tokens,
                 )
+                if provider.temperature is not None:
+                    kwargs["temperature"] = provider.temperature
                 if provider.api_base:
                     kwargs["api_base"] = provider.api_base
 
