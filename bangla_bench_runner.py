@@ -256,6 +256,7 @@ def parse_answer(text: str) -> Optional[str]:
       1. The LAST explicit answer marker ("answer: C", "উত্তর- B", ...).
       2. The whole reply being exactly one bare letter.
       3. The LAST standalone A-D letter on the LAST non-empty line only.
+      4. The LAST standalone A-D on any of the last 5 non-empty lines.
     """
     if not text:
         return None
@@ -275,6 +276,14 @@ def parse_answer(text: str) -> Optional[str]:
     line_matches = _STANDALONE_LETTER_RE.findall(last_line)
     if line_matches:
         return line_matches[-1].upper()
+
+    # Reasoning models sometimes emit the letter on a penultimate line before a
+    # trailing blank or explanation line — scan the last few non-empty lines.
+    non_empty_lines = [ln for ln in cleaned.splitlines() if ln.strip()]
+    for line in reversed(non_empty_lines[-5:]):
+        matches = _STANDALONE_LETTER_RE.findall(line)
+        if matches:
+            return matches[-1].upper()
     return None
 
 

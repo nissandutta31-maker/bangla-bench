@@ -46,6 +46,18 @@ def main() -> int:
         r.parse_answer("Reasoning weighs A and D...\nউত্তর: D") == "D",
         "Bangla marker beats earlier reasoning letters",
     )
+    ok &= check(
+        r.parse_answer("Long reasoning about options.\nB\n") == "B",
+        "penultimate line letter with trailing blank line",
+    )
+    ok &= check(
+        r.parse_answer("Step 1: eliminate C.\nStep 2: choose B.\n\n") == "B",
+        "CoT ending with letter on penultimate line before blank",
+    )
+    ok &= check(
+        r.parse_answer("Analysis of all four options.\n\nB") == "B",
+        "letter after blank line separator",
+    )
 
     # --- token extraction -------------------------------------------------- #
     ok &= check(
