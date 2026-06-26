@@ -57,6 +57,7 @@ The active `MODELS` list in [`run_leaderboard.py`](run_leaderboard.py):
 pip install -r requirements.txt
 
 # Export keys for whichever models you want ranked (others are skipped).
+# On Mac: add exports to ~/.zshrc (see scripts/env.zshrc.example), then `source ~/.zshrc`.
 export DEEPSEEK_API_KEY=...   # DeepSeek V4 Pro
 export OPENAI_API_KEY=...     # GPT-5.5
 export ANTHROPIC_API_KEY=...  # Claude Opus 4.8

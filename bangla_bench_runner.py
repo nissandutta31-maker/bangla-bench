@@ -44,6 +44,18 @@ if litellm is not None:
     litellm.drop_params = True
 
 
+def completion_temperature(model: str, temperature: float) -> Optional[float]:
+    """Return temperature for LiteLLM, or None to omit (provider default).
+
+    Some frontier models (e.g. Claude Opus 4.8) reject temperature=0 even when
+    litellm.drop_params is enabled.
+    """
+    m = model.lower()
+    if "claude-opus-4-8" in m or "/o3" in m:
+        return None
+    return temperature
+
+
 # --------------------------------------------------------------------------- #
 # Config models
 # --------------------------------------------------------------------------- #
@@ -432,9 +444,11 @@ def call_with_failover(
                     model=provider.model,
                     messages=messages,
                     api_key=provider.api_key,
-                    temperature=provider.temperature,
                     max_tokens=provider.max_tokens,
                 )
+                temp = completion_temperature(provider.model, provider.temperature)
+                if temp is not None:
+                    kwargs["temperature"] = temp
                 if provider.api_base:
                     kwargs["api_base"] = provider.api_base
 
