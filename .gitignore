@@ -5,7 +5,6 @@
 *.log
 logs/
 results*.jsonl
-leaderboard.csv
 
 # Python
 __pycache__/

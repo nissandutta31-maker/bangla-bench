@@ -1,0 +1,5 @@
+model,model_id,max_tokens,accuracy,correct,parsed,total
+GPT-5.5,openai/gpt-5.5,2048,0.92,92,100,100
+Claude Opus 4.8,anthropic/claude-opus-4-8,2048,0.92,92,100,100
+DeepSeek R1,deepseek/deepseek-reasoner,2048,0.85,85,95,100
+Llama 3.3 70B (NIM),openai/meta/llama-3.3-70b-instruct,32,0.84,84,100,100
