@@ -14,11 +14,12 @@ The live leaderboard is auto-generated in [`leaderboard.md`](./leaderboard.md) (
 
 | Rank | Model | Model ID | max_tokens | Accuracy | Correct/Total | Parsed |
 |------|-------|----------|------------|----------|----------------|--------|
-| 1 | DeepSeek R1 | `deepseek/deepseek-reasoner` | 2048 | 88.0% | 88/100 | 94/100 |
-| 2 | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` | 2048 | 84.0% | 84/100 | 93/100 |
-| 3 | DeepSeek V3 | `deepseek/deepseek-chat` | 32 | 77.0% | 77/100 | 100/100 |
+| 1 | GPT-5.5 | `openai/gpt-5.5` | 2048 | 92.0% | 92/100 | 100/100 |
+| 2 | Claude Opus 4.8 | `anthropic/claude-opus-4-8` | 2048 | 92.0% | 92/100 | 100/100 |
+| 3 | DeepSeek R1 | `deepseek/deepseek-reasoner` | 2048 | 85.0% | 85/100 | 95/100 |
+| 4 | Llama 3.3 70B (NIM) | `openai/meta/llama-3.3-70b-instruct` | 32 | 84.0% | 84/100 | 100/100 |
 
-*Scored on [`belebele_ben_100.jsonl`](./belebele_ben_100.jsonl) — a committed, deterministic 100-item subset of Belebele Bengali (`head -n 100 belebele_ben_full.jsonl`), so the numbers are reproducible. Frontier proprietary (GPT-5.x / Claude Opus / Gemini 3.x) and Bangla-native (TigerLLM, TituLM) models are now wired into `run_leaderboard.py`; they appear on the board as soon as their API keys are exported and the eval is re-run.*
+*Scored on [`belebele_ben_100.jsonl`](./belebele_ben_100.jsonl). Gemini, TigerLLM, and TituLM are wired in `run_leaderboard.py` — export `GEMINI_API_KEY` / `HF_TOKEN` and re-run to add them.*
 
 For context: the random floor on a 4-way MCQ is 25%, and frontier models score well above it on Belebele reading comprehension. A healthy v0 baseline should look nothing like chance.
 
@@ -28,7 +29,7 @@ For context: the random floor on a 4-way MCQ is 25%, and frontier models score w
 
 - **Dataset:** Belebele Bengali split (`ben_Beng`) — 900 multiple-choice reading-comprehension items, included in full ([`belebele_ben_full.jsonl`](./belebele_ben_full.jsonl)). Belebele is human-translated by its original authors.
 - **Task:** 4-way MCQ. The model receives the **passage**, the question, and four options, and answers with a single letter (A–D).
-- **Scoring:** exact-letter match · **temperature 0** · **closed-book** (no tools, no retrieval).
+- **Scoring:** exact-letter match · **temperature 0 where supported** · **closed-book** (no tools, no retrieval).
 - **Per-model independence:** every model is scored and ranked on its own. Scores are never averaged or failed-over across providers. (The multi-provider failover in the runner is reliability infrastructure, not part of scoring — see [The runner](#the-runner-infrastructure).)
 - **Per-model `max_tokens`:** 2048 for reasoning models (R1, V4 Pro — hidden CoT tokens consume budget), 32 for non-reasoning models (single-letter answer).
 - **Closed-book only:** models that perform live web retrieval (e.g. Perplexity Sonar *online* models) are excluded from the leaderboard or reported separately — retrieval breaks the closed-book condition.
