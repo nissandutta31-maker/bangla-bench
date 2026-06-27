@@ -53,7 +53,7 @@ class ProviderConfig:
     model: str
     api_key_env: str
     api_base: Optional[str] = None
-    temperature: float = 0.0
+    temperature: Optional[float] = 0.0
     max_tokens: int = 16
 
     @property
@@ -453,11 +453,34 @@ def call_with_failover(
                     model=provider.model,
                     messages=messages,
                     api_key=provider.api_key,
-                    temperature=provider.temperature,
                     max_tokens=provider.max_tokens,
                 )
+                if provider.temperature is not None:
+                    kwargs["temperature"] = provider.temperature
                 if provider.api_base:
                     kwargs["api_base"] = provider.api_base
+
+                # #region agent log
+                try:
+                    import json as _json, time as _time
+                    from pathlib import Path as _Path
+                    _log = _Path(__file__).resolve().parent / ".cursor" / "debug-13e136.log"
+                    _log.parent.mkdir(parents=True, exist_ok=True)
+                    with open(_log, "a", encoding="utf-8") as _fh:
+                        _fh.write(_json.dumps({
+                            "sessionId": "13e136", "runId": "post-fix", "hypothesisId": "A",
+                            "location": "bangla_bench_runner:call_with_failover",
+                            "message": "completion kwargs",
+                            "data": {
+                                "model": provider.model,
+                                "temperature_in_kwargs": "temperature" in kwargs,
+                                "temperature_value": kwargs.get("temperature"),
+                            },
+                            "timestamp": int(_time.time() * 1000),
+                        }, ensure_ascii=False) + "\n")
+                except Exception:
+                    pass
+                # #endregion
 
                 response = completion(**kwargs)
                 latency = time.monotonic() - start

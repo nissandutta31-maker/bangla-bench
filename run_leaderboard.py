@@ -12,7 +12,9 @@ own single-provider config, then aggregates the per-model accuracies into a
 ranked table (leaderboard.md + leaderboard.csv).
 
 Usage:
-    python3 run_leaderboard.py belebele_ben_sample.jsonl
+    python3 run_leaderboard.py belebele_ben_100.jsonl
+    python3 run_leaderboard.py belebele_ben_100.jsonl --only "GPT-5.5,Claude Opus 4.8"
+    python3 run_leaderboard.py belebele_ben_100.jsonl --fresh   # delete stale results first
 
 Only models whose API key env var is actually set are run; the rest are skipped,
 so you can benchmark a subset by exporting only the keys you have.
@@ -129,7 +131,7 @@ def run_one(base, dataset, label, model, key_env, api_base, max_tokens, temperat
     cfg = replace(
         base,
         providers=[prov],
-        csv_path=f"logs/leaderboard_{key_env}.csv",
+        csv_path=f"logs/leaderboard_{label.replace(' ', '_').replace('/', '-')}.csv",
     )
     out_path = results_path(label)
     summary = r.evaluate_file_concurrent(cfg, dataset, out_path, max_workers=6)
@@ -146,14 +148,31 @@ def count_dataset_items(path):
 
 
 def main(argv):
-    dataset = "belebele_ben_sample.jsonl"
+    dataset = "belebele_ben_100.jsonl"
     only: set[str] | None = None
+    fresh = False
     args = list(argv)
     if args and not args[0].startswith("-"):
         dataset = args.pop(0)
-    if args and args[0] == "--only":
-        args.pop(0)
-        only = {name.strip() for name in args.pop(0).split(",") if name.strip()}
+    while args:
+        if args[0] == "--only":
+            args.pop(0)
+            only = {name.strip() for name in args.pop(0).split(",") if name.strip()}
+        elif args[0] == "--fresh":
+            args.pop(0)
+            fresh = True
+        else:
+            print(f"[error] unknown argument: {args[0]}", file=sys.stderr)
+            return 1
+
+    if fresh:
+        for label, *_rest in MODELS:
+            if only is not None and label not in only:
+                continue
+            path = results_path(label)
+            if os.path.exists(path):
+                os.remove(path)
+                print(f"[fresh] removed {path}")
 
     base = r.RunnerConfig.load("config.yaml")
 
