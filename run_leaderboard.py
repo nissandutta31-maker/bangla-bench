@@ -67,13 +67,14 @@ SIMPLE_MAX_TOKENS = 32
 FRONTIER_KEY_ENVS = frozenset({"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"})
 
 MODELS = [
-    # label                  litellm model string                              key env var          api_base (None, URL, or env:VAR_NAME)              max_tokens
-    ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",                        "DEEPSEEK_API_KEY",  None,                                                UNIFORM_MAX_TOKENS),
-    ("GPT-5.5",              "openai/gpt-5.5",                                  "OPENAI_API_KEY",    None,                                                UNIFORM_MAX_TOKENS),
-    ("Claude Opus 4.8",      "anthropic/claude-opus-4-8",                       "ANTHROPIC_API_KEY", None,                                                UNIFORM_MAX_TOKENS),
-    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",              "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",               SIMPLE_MAX_TOKENS),
-    ("TituLLM 3B",           "huggingface/hishab/titulm-llama-3.2-3b-v1.1",     "HF_TOKEN",          "env:HF_TITULLM_API_BASE",                           UNIFORM_MAX_TOKENS),
-    ("TigerLLM 9B",          "huggingface/md-nishat-008/TigerLLM-9B-it",        "HF_TOKEN",          "env:HF_TIGERLLM_API_BASE",                          UNIFORM_MAX_TOKENS),
+    # label                  litellm model string                              key env var          api_base (None, URL, or env:VAR_NAME)              max_tokens              temperature (None = omit; frontier models reject 0)
+    ("DeepSeek R1",          "deepseek/deepseek-reasoner",                      "DEEPSEEK_API_KEY",  None,                                                UNIFORM_MAX_TOKENS,     0.0),
+    ("DeepSeek V4 Pro",      "deepseek/deepseek-v4-pro",                        "DEEPSEEK_API_KEY",  None,                                                UNIFORM_MAX_TOKENS,     0.0),
+    ("GPT-5.5",              "openai/gpt-5.5",                                  "OPENAI_API_KEY",    None,                                                UNIFORM_MAX_TOKENS,     None),
+    ("Claude Opus 4.8",      "anthropic/claude-opus-4-8",                       "ANTHROPIC_API_KEY", None,                                                UNIFORM_MAX_TOKENS,     None),
+    ("Llama 3.3 70B (NIM)",  "openai/meta/llama-3.3-70b-instruct",              "NVIDIA_API_KEY",    "https://integrate.api.nvidia.com/v1",               SIMPLE_MAX_TOKENS,      0.0),
+    ("TituLLM 3B",           "huggingface/hishab/titulm-llama-3.2-3b-v1.1",     "HF_TOKEN",          "env:HF_TITULLM_API_BASE",                           UNIFORM_MAX_TOKENS,     0.0),
+    ("TigerLLM 9B",          "huggingface/md-nishat-008/TigerLLM-9B-it",        "HF_TOKEN",          "env:HF_TIGERLLM_API_BASE",                          UNIFORM_MAX_TOKENS,     0.0),
 ]
 
 
@@ -86,17 +87,38 @@ def resolve_api_base(spec: str | None) -> str | None:
     return spec
 
 
-def run_one(base, dataset, label, model, key_env, api_base, max_tokens):
+def results_path(label: str) -> str:
+    return f"results_{label.replace(' ', '_').replace('/', '-')}.jsonl"
+
+
+def summary_from_results(path: str) -> dict:
+    """Aggregate accuracy stats from an existing results JSONL file."""
+    total = correct = parsed = 0
+    for record in r.iter_jsonl(path):
+        total += 1
+        if record.get("predicted") is not None:
+            parsed += 1
+        if record.get("is_correct"):
+            correct += 1
+    return {
+        "correct": correct,
+        "parsed": parsed,
+        "total": total,
+        "accuracy": (correct / total) if total else 0.0,
+    }
+
+
+def run_one(base, dataset, label, model, key_env, api_base, max_tokens, temperature):
     prov = r.ProviderConfig(
         name=label, model=model, api_key_env=key_env,
-        api_base=api_base, temperature=0.0, max_tokens=max_tokens,
+        api_base=api_base, temperature=temperature, max_tokens=max_tokens,
     )
     cfg = replace(
         base,
         providers=[prov],
         csv_path=f"logs/leaderboard_{key_env}.csv",
     )
-    out_path = f"results_{label.replace(' ', '_').replace('/', '-')}.jsonl"
+    out_path = results_path(label)
     # Use concurrent evaluator for parallel item processing
     summary = r.evaluate_file_concurrent(cfg, dataset, out_path, max_workers=6)
     return summary
@@ -117,17 +139,28 @@ def main(argv):
     if "--frontier-only" in args:
         frontier_only = True
         args = [a for a in args if a != "--frontier-only"]
+
+    only: set[str] | None = None
+    if "--only" in args:
+        idx = args.index("--only")
+        args.pop(idx)
+        if idx < len(args):
+            only = {name.strip() for name in args.pop(idx).split(",") if name.strip()}
+
     if "-h" in args or "--help" in args:
         print(__doc__)
         print("Options:")
-        print("  --frontier-only   Run only GPT-5.5 + Claude Opus 4.8 (skip DeepSeek, Llama, Bangla-native)")
+        print("  --frontier-only       Run only GPT-5.5 + Claude Opus 4.8 (skip DeepSeek, Llama, Bangla-native)")
+        print("  --only LABEL[,LABEL]  Run only the named model(s) (e.g. --only 'GPT-5.5,Claude Opus 4.8')")
         return 0
 
-    dataset = args[0] if args else "belebele_ben_sample.jsonl"
+    dataset = args[0] if args and not args[0].startswith("-") else "belebele_ben_sample.jsonl"
     base = r.RunnerConfig.load("config.yaml")  # reuse the Bangla system prompt + retry (loaded ONCE)
 
-    rows = []
-    for label, model, key_env, api_base_spec, max_tokens in MODELS:
+    rows_by_label: dict[str, dict] = {}
+    for label, model, key_env, api_base_spec, max_tokens, temperature in MODELS:
+        if only is not None and label not in only:
+            continue
         if frontier_only and key_env not in FRONTIER_KEY_ENVS:
             print(f"[skip] {label}: --frontier-only (not a frontier proprietary model)")
             continue
@@ -140,8 +173,8 @@ def main(argv):
             print(f"[skip] {label}: {env_name} not set (HF Inference Endpoint URL)")
             continue
         print(f"[run ] {label} ({model}) ...")
-        s = run_one(base, dataset, label, model, key_env, api_base, max_tokens)
-        rows.append({
+        s = run_one(base, dataset, label, model, key_env, api_base, max_tokens, temperature)
+        rows_by_label[label] = {
             "model": label,
             "model_id": model,
             "max_tokens": max_tokens,
@@ -149,14 +182,36 @@ def main(argv):
             "correct": s["correct"],
             "parsed": s["parsed"],
             "total": s["total"],
-        })
+        }
+
+    # Merge in models not re-run this session but with existing results on disk.
+    for label, model, key_env, api_base, max_tokens, _temperature in MODELS:
+        if label in rows_by_label:
+            continue
+        path = results_path(label)
+        if not os.path.exists(path):
+            continue
+        s = summary_from_results(path)
+        if s["total"] == 0:
+            continue
+        rows_by_label[label] = {
+            "model": label,
+            "model_id": model,
+            "max_tokens": max_tokens,
+            "accuracy": round(s["accuracy"], 4),
+            "correct": s["correct"],
+            "parsed": s["parsed"],
+            "total": s["total"],
+        }
+
+    rows = list(rows_by_label.values())
 
     # No models ran (e.g. no API keys exported): don't emit an empty leaderboard
     # that looks like a real-but-failed run. Signal failure with a non-zero exit.
     if not rows:
         print(
             "[error] No models ran: none of the API keys in MODELS are set "
-            f"({', '.join(k for _, _, k, _, _ in MODELS)}). "
+            f"({', '.join(k for _, _, k, _, _, _ in MODELS)}). "
             "Export at least one key and re-run. Leaderboard not written.",
             file=sys.stderr,
         )
@@ -178,8 +233,8 @@ def main(argv):
         fh.write("# BanglaBench — Belebele (Bengali) Leaderboard\n\n")
         fh.write(f"- Run date (UTC): {run_date}\n")
         fh.write(f"- Dataset: `{dataset}` · {item_count_str} items\n")
-        fh.write("- Scoring: 4-way MCQ · temperature 0 · closed-book\n")
-        fh.write("- max_tokens: 2048 for reasoning models; 32 for Llama 3.3 (NIM)\n")
+        fh.write("- Scoring: 4-way MCQ · temperature 0 where supported · closed-book\n")
+        fh.write("- max_tokens: 2048 for reasoning models; 32 for non-reasoning (Llama NIM)\n")
         fh.write(f"- litellm version: {LITELLM_VERSION}\n\n")
         fh.write("| Rank | Model | Model ID | max_tokens | Accuracy | Correct/Total | Parsed |\n")
         fh.write("|---|---|---|---|---|---|---|\n")
