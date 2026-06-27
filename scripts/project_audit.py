@@ -97,33 +97,27 @@ def audit_readme_drift() -> None:
 
 
 def audit_hf_csv_collision() -> None:
-    """H-D: Multiple models sharing same key_env collide on CSV path."""
+    """H-D: Multiple models sharing same audit CSV path."""
     sys.path.insert(0, str(ROOT))
     import run_leaderboard as rl
 
     paths: dict[str, list[str]] = {}
-    for label, _model, key_env, _base, _mt, _t in rl.MODELS:
-        csv_path = f"logs/leaderboard_{key_env}.csv"
+    for label, _model, _key_env, _base, _mt, _t in rl.MODELS:
+        csv_path = f"logs/leaderboard_{label.replace(' ', '_').replace('/', '-')}.csv"
         paths.setdefault(csv_path, []).append(label)
     collisions = {k: v for k, v in paths.items() if len(v) > 1}
-    log("D", "project_audit:hf_csv", "CSV path collisions by key_env", {
+    log("D", "project_audit:hf_csv", "CSV path collisions by model label", {
         "collisions": collisions,
     })
 
 
 def audit_default_dataset() -> None:
     """H-E: Default dataset vs committed eval set."""
-    sys.path.insert(0, str(ROOT))
-    import run_leaderboard as rl
-
-    default = "belebele_ben_sample.jsonl"
     committed = "belebele_ben_100.jsonl"
-    log("E", "project_audit:default_dataset", "default dataset mismatch", {
-        "run_leaderboard_default_in_docstring": "belebele_ben_sample.jsonl" in rl.__doc__ or True,
-        "main_default_is_sample": default,
+    log("E", "project_audit:default_dataset", "default dataset", {
+        "main_default": "belebele_ben_100.jsonl",
         "committed_100_exists": (ROOT / committed).exists(),
-        "sample_exists": (ROOT / default).exists(),
-        "main_code_default": "belebele_ben_sample.jsonl",  # from source
+        "sample_exists": (ROOT / "belebele_ben_sample.jsonl").exists(),
     })
 
 
