@@ -5,6 +5,11 @@
 *.log
 logs/
 results*.jsonl
+leaderboard.csv
+# NOTE: belebele_ben_100.jsonl is intentionally COMMITTED (it is the exact
+# eval set the published leaderboard is generated on) so the numbers are
+# reproducible. It is derived deterministically from the full split:
+#   head -n 100 belebele_ben_full.jsonl > belebele_ben_100.jsonl
 
 # Python
 __pycache__/

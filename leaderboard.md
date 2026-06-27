@@ -1,7 +1,7 @@
 # BanglaBench — Belebele (Bengali) Leaderboard
 
-- Run date (UTC): 2026-06-26T23:35:15.066130+00:00
-- Dataset: `belebele_ben_100.jsonl` · 100 items
+- Run date (UTC): 2026-06-27T04:48:02.761138+00:00
+- Dataset: `belebele_ben_sample.jsonl` · 30 items
 - Scoring: 4-way MCQ · temperature 0 where supported · closed-book
 - max_tokens: 2048 for reasoning models, 32 for non-reasoning (Llama NIM)
 - litellm version: 1.83.9

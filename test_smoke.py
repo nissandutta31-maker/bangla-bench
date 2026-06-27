@@ -46,6 +46,31 @@ def main() -> int:
         r.parse_answer("Reasoning weighs A and D...\nউত্তর: D") == "D",
         "Bangla marker beats earlier reasoning letters",
     )
+
+    # --- stricter fallback: letter fused to Bengali script / punctuation ---- #
+    # These previously returned None (scored wrong) because Python's \b treats
+    # Bengali code points as word chars, so \b([ABCD])\b never fired.
+    ok &= check(
+        r.parse_answer("সঠিক উত্তরঃC") == "C",
+        "letter fused to Bengali text (no boundary) -> isolated-letter fallback",
+    )
+    ok &= check(
+        r.parse_answer("দীর্ঘ যুক্তি...\nচূড়ান্ত উত্তর-B।") == "B",
+        "letter glued to Bengali word + trailing danda -> fallback",
+    )
+    ok &= check(
+        r.parse_answer("আমি মনে করি উত্তর A\nধন্যবাদ।") == "A",
+        "thinking model: letter a line above a closing remark -> bottom-up scan",
+    )
+    ok &= check(
+        r.parse_answer("শুধু ব্যাখ্যা, কোনো অক্ষর নেই।") is None,
+        "no A-D letter anywhere -> still None (no false positive)",
+    )
+    ok &= check(
+        r.parse_answer("just a thought here\nanother plain line") is None,
+        "fallback is uppercase-only: lowercase article 'a' is not parsed as A",
+    )
+    # --- penultimate line with bare \b scan (English; from v0 base) --------- #
     ok &= check(
         r.parse_answer("Long reasoning about options.\nB\n") == "B",
         "penultimate line letter with trailing blank line",
