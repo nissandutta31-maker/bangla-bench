@@ -53,7 +53,7 @@ class ProviderConfig:
     model: str
     api_key_env: str
     api_base: Optional[str] = None
-    temperature: Optional[float] = 0.0
+    temperature: float = 0.0
     max_tokens: int = 16
 
     @property
@@ -246,6 +246,17 @@ _ANSWER_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 _STANDALONE_LETTER_RE = re.compile(r"\b([ABCD])\b", re.IGNORECASE)
+# Stricter fallback for reasoning / thinking models whose final letter is
+# *fused* to Bengali script or punctuation (e.g. "সঠিক উত্তরঃC" or "উত্তর-C।").
+# Python's \b sees Bengali code points as word chars, so \b([ABCD])\b never
+# fires when a letter is glued to Bengali text -> the answer was being scored as
+# unparsed (and therefore wrong). This pattern matches an UPPERCASE A-D that is
+# only required to be free of adjacent ASCII alphanumerics, so it accepts a
+# letter touching Bengali characters or a trailing danda while still ignoring
+# things like "D-Day" -> "Day" (D is followed by an ASCII letter) and the
+# English article "a"/"A" embedded in a word. Uppercase-only keeps it from
+# grabbing the English article "a" or stray lowercase letters in prose.
+_ISOLATED_LETTER_RE = re.compile(r"(?<![A-Za-z0-9])([ABCD])(?![A-Za-z0-9])")
 
 
 def parse_answer(text: str) -> Optional[str]:
@@ -256,7 +267,17 @@ def parse_answer(text: str) -> Optional[str]:
       1. The LAST explicit answer marker ("answer: C", "উত্তর- B", ...).
       2. The whole reply being exactly one bare letter.
       3. The LAST standalone A-D letter on the LAST non-empty line only.
-      4. The LAST standalone A-D on any of the last 5 non-empty lines.
+      4. (stricter fallback) The LAST UPPERCASE A-D on the last non-empty line
+         that is merely free of adjacent ASCII alphanumerics -- recovers a
+         letter fused to Bengali text/punctuation where step 3's \\b fails.
+      5. (stricter fallback) The same isolated-letter scan walking the
+         remaining lines bottom-up, for thinking models whose final letter
+         lands a line or two above the literal last line.
+
+    Steps 4-5 only ever run when steps 1-3 found nothing, so they can only turn
+    a previously-unparsed (always-wrong) answer into a parsed one -- they can
+    never change a letter that an earlier, higher-precedence step already
+    resolved, and so can never lower a model's accuracy.
     """
     if not text:
         return None
@@ -269,21 +290,21 @@ def parse_answer(text: str) -> Optional[str]:
     if cleaned.upper() in _LETTERS:
         return cleaned.upper()
 
-    last_line = next(
-        (ln for ln in reversed(cleaned.splitlines()) if ln.strip()),
-        "",
-    )
-    line_matches = _STANDALONE_LETTER_RE.findall(last_line)
-    if line_matches:
-        return line_matches[-1].upper()
+    nonempty_lines = [ln for ln in cleaned.splitlines() if ln.strip()]
+    if nonempty_lines:
+        last_line = nonempty_lines[-1]
+        line_matches = _STANDALONE_LETTER_RE.findall(last_line)
+        if line_matches:
+            return line_matches[-1].upper()
 
-    # Reasoning models sometimes emit the letter on a penultimate line before a
-    # trailing blank or explanation line — scan the last few non-empty lines.
-    non_empty_lines = [ln for ln in cleaned.splitlines() if ln.strip()]
-    for line in reversed(non_empty_lines[-5:]):
-        matches = _STANDALONE_LETTER_RE.findall(line)
-        if matches:
-            return matches[-1].upper()
+        isolated = _ISOLATED_LETTER_RE.findall(last_line)
+        if isolated:
+            return isolated[-1].upper()
+
+        for ln in reversed(nonempty_lines[:-1]):
+            isolated = _ISOLATED_LETTER_RE.findall(ln)
+            if isolated:
+                return isolated[-1].upper()
     return None
 
 
@@ -432,10 +453,9 @@ def call_with_failover(
                     model=provider.model,
                     messages=messages,
                     api_key=provider.api_key,
+                    temperature=provider.temperature,
                     max_tokens=provider.max_tokens,
                 )
-                if provider.temperature is not None:
-                    kwargs["temperature"] = provider.temperature
                 if provider.api_base:
                     kwargs["api_base"] = provider.api_base
 
