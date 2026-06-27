@@ -123,6 +123,40 @@ One JSON object per line. The normalizer accepts common field-name variants:
 | `belebele_ben_sample.jsonl` | 30-item sample for quick runs |
 | `config.yaml` | Models, prompts, retry, logging |
 | `test_smoke.py` | Offline unit tests (no API calls) |
+| `test_silent_failure.py` | Offline tests for silent-failure detector + haystack builder |
+| `tasks/` | inspect-ai task suite (`bangla_needle_haystack`) |
+| `src/validators/silent_failure.py` | Dependency-free "silent failure" detector |
+
+---
+
+## v0.1 harness (inspect-ai track)
+
+Alongside the Belebele leaderboard, v0.1 adds an [inspect-ai](https://inspect.ai-safety-institute.org.uk/)
+task suite aimed at **silent failures** — responses a model emits confidently
+but that are broken in ways exact-match scoring misses. The first task,
+`bangla_needle_haystack`, embeds a Bengali fact inside fluent Bengali filler
+(drawn from the project's own Belebele passages) and sweeps context size ×
+needle depth to find *where* a model drops context.
+
+```bash
+pip install -r requirements-inspect.txt    # pulls in inspect-ai
+
+# Frontier (native key via LiteLLM):
+inspect eval tasks/bangla_needle_haystack.py --model openai/gpt-5.5
+
+# Local open-weight (Ollama), custom sweep:
+inspect eval tasks/bangla_needle_haystack.py --model ollama/gemma-2-9b \
+    -T target_tokens=1000,8000 -T depths=0.0,0.5,1.0
+```
+
+The scorer reports accuracy **and** a silent-failure rate; per-sample flags
+(`FALSE_NEGATIVE_CONTEXT_DROP`, `REASONING_TRUNCATED`, `MOJIBAKE_DETECTED`,
+`SCRIPT_DRIFT_ENGLISH`, `TOKENIZER_EXPLOSION`) are written to the inspect log
+for post-mortem analysis. The detector in `src/validators/silent_failure.py` is
+dependency-free and unit-tested offline (`python3 test_silent_failure.py`).
+
+This track is **additive** — the LiteLLM leaderboard path does not depend on
+inspect-ai.
 
 ---
 
