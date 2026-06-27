@@ -29,3 +29,19 @@ jobs:
 
     - name: Silent-failure detector tests (no API calls)
       run: python3 test_silent_failure.py
+
+  inspect-import:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install inspect-ai track
+      run: pip install -r requirements-inspect.txt
+
+    - name: Import smoke (task + scorer, no API calls)
+      run: python3 test_inspect_import.py
