@@ -1,0 +1,5 @@
+# inspect-ai track (needle-in-haystack + silent-failure detection).
+# This is separate from the main requirements.txt because the LiteLLM
+# leaderboard path does not import inspect-ai at all.
+# Install with: pip install -r requirements-inspect.txt
+inspect-ai>=0.3.0
