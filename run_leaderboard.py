@@ -14,7 +14,7 @@ ranked table (leaderboard.md + leaderboard.csv).
 Usage:
     python3 run_leaderboard.py belebele_ben_100.jsonl
     python3 run_leaderboard.py belebele_ben_100.jsonl --only "GPT-5.5,Claude Opus 4.8"
-    python3 run_leaderboard.py belebele_ben_100.jsonl --fresh   # delete stale results first
+    python3 run_leaderboard.py belebele_ben_100.jsonl --fresh   # delete all stale results first
 
 Only models whose API key env var is actually set are run; the rest are skipped,
 so you can benchmark a subset by exporting only the keys you have.
@@ -106,8 +106,19 @@ def results_path(label: str) -> str:
     return f"results_{label.replace(' ', '_').replace('/', '-')}.jsonl"
 
 
-def summary_from_results(path: str) -> dict:
-    """Aggregate accuracy stats from an existing results JSONL file."""
+def all_results_paths() -> list[str]:
+    return [results_path(label) for label, *_rest in MODELS]
+
+
+def summary_from_results(path: str, dataset: str) -> dict | None:
+    """Aggregate accuracy stats from an existing results JSONL file.
+
+    Returns None when the file's dataset fingerprint does not match ``dataset``.
+    """
+    ok, msg = r.check_results_dataset_match(path, dataset)
+    if not ok:
+        print(f"[skip] {msg}", file=sys.stderr)
+        return None
     total = correct = parsed = 0
     for record in r.iter_jsonl(path):
         total += 1
@@ -166,10 +177,7 @@ def main(argv):
             return 1
 
     if fresh:
-        for label, *_rest in MODELS:
-            if only is not None and label not in only:
-                continue
-            path = results_path(label)
+        for path in all_results_paths():
             if os.path.exists(path):
                 os.remove(path)
                 print(f"[fresh] removed {path}")
@@ -196,24 +204,27 @@ def main(argv):
         }
 
     # Merge in models not re-run this session but with existing results on disk.
-    for label, model, key_env, api_base, max_tokens, _temperature in MODELS:
-        if label in rows_by_label:
-            continue
-        path = results_path(label)
-        if not os.path.exists(path):
-            continue
-        s = summary_from_results(path)
-        if s["total"] == 0:
-            continue
-        rows_by_label[label] = {
-            "model": label,
-            "model_id": model,
-            "max_tokens": max_tokens,
-            "accuracy": round(s["accuracy"], 4),
-            "correct": s["correct"],
-            "parsed": s["parsed"],
-            "total": s["total"],
-        }
+    # Skipped when --fresh: stale files were deleted and only this run's scores
+    # should feed the board.
+    if not fresh:
+        for label, model, key_env, api_base, max_tokens, _temperature in MODELS:
+            if label in rows_by_label:
+                continue
+            path = results_path(label)
+            if not os.path.exists(path):
+                continue
+            s = summary_from_results(path, dataset)
+            if s is None or s["total"] == 0:
+                continue
+            rows_by_label[label] = {
+                "model": label,
+                "model_id": model,
+                "max_tokens": max_tokens,
+                "accuracy": round(s["accuracy"], 4),
+                "correct": s["correct"],
+                "parsed": s["parsed"],
+                "total": s["total"],
+            }
 
     rows = list(rows_by_label.values())
 

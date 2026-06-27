@@ -620,6 +620,64 @@ def render_prompt(item: MCQItem) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Dataset fingerprinting (resume / merge safety)
+# --------------------------------------------------------------------------- #
+def dataset_fingerprint(dataset_path: str) -> dict[str, str]:
+    """Return stable provenance fields for a dataset JSONL file."""
+    path = Path(dataset_path)
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    # Store the path as given (relative paths stay portable across clones).
+    return {
+        "dataset_path": str(path),
+        "dataset_sha256": digest.hexdigest(),
+    }
+
+
+def results_dataset_fingerprint(results_path: str) -> Optional[dict[str, str]]:
+    """Read dataset provenance from the first row of a results JSONL file."""
+    for record in iter_jsonl(results_path):
+        path = record.get("dataset_path")
+        sha = record.get("dataset_sha256")
+        if path is not None and sha is not None:
+            return {"dataset_path": str(path), "dataset_sha256": str(sha)}
+        return None
+    return None
+
+
+def check_results_dataset_match(
+    results_path: str,
+    dataset_path: str,
+) -> tuple[bool, str]:
+    """Return whether an existing results file may be resumed or merged."""
+    if not Path(results_path).exists():
+        return True, ""
+
+    expected = dataset_fingerprint(dataset_path)
+    stored = results_dataset_fingerprint(results_path)
+    if stored is None:
+        return (
+            False,
+            f"{results_path} has no dataset fingerprint (legacy or corrupt); "
+            "delete it or re-run with --fresh",
+        )
+    if stored["dataset_sha256"] != expected["dataset_sha256"]:
+        return (
+            False,
+            (
+                f"{results_path} was scored on a different dataset "
+                f"({stored['dataset_path']} sha256={stored['dataset_sha256'][:12]}…, "
+                f"current {expected['dataset_path']} "
+                f"sha256={expected['dataset_sha256'][:12]}…); "
+                "delete it or re-run with --fresh"
+            ),
+        )
+    return True, ""
+
+
+# --------------------------------------------------------------------------- #
 # Evaluation drivers
 # --------------------------------------------------------------------------- #
 def iter_jsonl(path: str) -> Iterable[dict[str, Any]]:
@@ -661,6 +719,12 @@ def evaluate_file(
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
+    fingerprint = dataset_fingerprint(input_path)
+    if out.exists():
+        ok, msg = check_results_dataset_match(str(out), input_path)
+        if not ok:
+            raise ValueError(msg)
+
     total = 0
     correct = 0
     parsed = 0
@@ -693,6 +757,8 @@ def evaluate_file(
         )
         record = {
             "item_id": item.item_id,
+            "dataset_path": fingerprint["dataset_path"],
+            "dataset_sha256": fingerprint["dataset_sha256"],
             "provider": result.provider,
             "model": result.model,
             "predicted": result.parsed_answer,

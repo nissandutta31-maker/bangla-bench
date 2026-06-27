@@ -117,13 +117,15 @@ One JSON object per line. The normalizer accepts common field-name variants:
 | File | Purpose |
 |------|---------|
 | `run_leaderboard.py` | Scores each model independently; generates the leaderboard |
-| `leaderboard.md` / `leaderboard.csv` | Auto-generated standings (canonical) |
+| `leaderboard.md` | Auto-generated standings (tracked; canonical) |
+| `leaderboard.csv` | Same standings as CSV (gitignored local artifact) |
 | `bangla_bench_runner.py` | Evaluation engine: routing, failover, parsing, logging |
 | `belebele_ben_full.jsonl` | Full Belebele Bengali split (900 items) |
 | `belebele_ben_100.jsonl` | Committed 100-item eval set the leaderboard is scored on (`head -n 100` of the full split) |
 | `belebele_ben_sample.jsonl` | 30-item sample for quick runs |
 | `config.yaml` | Models, prompts, retry, logging |
 | `test_smoke.py` | Offline unit tests (no API calls) |
+| `test_inspect_import.py` | Offline import smoke for inspect-ai task + scorer |
 | `test_silent_failure.py` | Offline tests for silent-failure detector + haystack builder |
 | `tasks/` | inspect-ai task suite (`bangla_needle_haystack`) |
 | `src/validators/silent_failure.py` | Dependency-free "silent failure" detector |

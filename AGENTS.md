@@ -45,8 +45,9 @@ and `FIXES.md` for design history.
   parse cleanly. The fallback only ever converts a previously-unparsed answer, so
   it can never lower a model's accuracy.
 - **Reproducibility:** `belebele_ben_100.jsonl` is intentionally committed (it is
-  the exact eval set the board is scored on) and is derived deterministically via
-  `head -n 100 belebele_ben_full.jsonl`. The eval is resumable: re-running against
-  an existing `results_*.jsonl` skips already-scored items.
+ the exact eval set the board is scored on) and is derived deterministically via
+ `head -n 100 belebele_ben_full.jsonl`. The eval is resumable when
+ `results_*.jsonl` carries a matching `dataset_sha256`; legacy or mismatched
+ files are refused (use `--fresh` to wipe all board-feeding results).
 - **Gitignored artifacts:** `results*.jsonl`, `leaderboard.csv`, and `logs/` are
-  ignored; `leaderboard.md` is tracked.
+ ignored; `leaderboard.md` is tracked (CSV is a local export only).

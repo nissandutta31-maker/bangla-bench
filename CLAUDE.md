@@ -76,7 +76,7 @@ Steps 4–5 only fire when steps 1–3 found nothing, so they can never lower a 
 ## Reproducibility
 
 - `belebele_ben_100.jsonl` is committed — it's the exact eval set the published leaderboard is scored on (`head -n 100 belebele_ben_full.jsonl`).
-- Eval is resumable: re-running against existing `results_*.jsonl` skips already-scored items.
+- Eval is resumable: re-running against existing `results_*.jsonl` skips already-scored items, but only when the file's `dataset_sha256` matches the current dataset (legacy or mismatched files must be deleted or re-run with `--fresh`).
 - `leaderboard.md` is tracked; `leaderboard.csv`, `results*.jsonl`, and `logs/` are gitignored.
 
 ## Model-specific notes

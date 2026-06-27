@@ -196,6 +196,54 @@ def main() -> int:
         for k in ("NVIDIA_API_KEY", "DEEPSEEK_API_KEY"):
             os.environ.pop(k, None)
 
+    # --- dataset fingerprinting (resume / merge safety) -------------------- #
+    fp = r.dataset_fingerprint("belebele_ben_100.jsonl")
+    ok &= check(
+        fp["dataset_path"] == "belebele_ben_100.jsonl" and len(fp["dataset_sha256"]) == 64,
+        "dataset_fingerprint returns path + sha256",
+    )
+    ok &= check(
+        fp == r.dataset_fingerprint("belebele_ben_100.jsonl"),
+        "dataset_fingerprint is stable across calls",
+    )
+
+    with tempfile.TemporaryDirectory() as d:
+        legacy = os.path.join(d, "legacy.jsonl")
+        with open(legacy, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps({"item_id": "x", "predicted": "A"}) + "\n")
+        match_ok, _ = r.check_results_dataset_match(legacy, "belebele_ben_100.jsonl")
+        ok &= check(not match_ok, "legacy results without fingerprint are rejected")
+
+        stamped = os.path.join(d, "stamped.jsonl")
+        with open(stamped, "w", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "item_id": "x",
+                        "dataset_path": fp["dataset_path"],
+                        "dataset_sha256": "0" * 64,
+                    }
+                )
+                + "\n"
+            )
+        match_ok, msg = r.check_results_dataset_match(stamped, "belebele_ben_100.jsonl")
+        ok &= check(not match_ok and "different dataset" in msg, "mismatched sha256 is rejected")
+
+        good = os.path.join(d, "good.jsonl")
+        with open(good, "w", encoding="utf-8") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "item_id": "x",
+                        "dataset_path": fp["dataset_path"],
+                        "dataset_sha256": fp["dataset_sha256"],
+                    }
+                )
+                + "\n"
+            )
+        match_ok, _ = r.check_results_dataset_match(good, "belebele_ben_100.jsonl")
+        ok &= check(match_ok, "matching fingerprint is accepted")
+
     print("\n" + ("ALL PASSED" if ok else "SOME FAILED"))
     return 0 if ok else 1
 
